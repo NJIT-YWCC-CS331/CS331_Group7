@@ -215,26 +215,60 @@ $year = isset($_GET['year']) ? trim($_GET['year']) : '';
 						$sql .= " ORDER BY CarID";
 
 						$rows = [];
+						$num_rows = 0;
 
 						if (count($params) > 0) {
 							$stmt = $conn->prepare($sql);
-							$stmt->bind_param($types, ...$params);
+							if ($stmt === false) {
+								die("Error preparing query: " . $conn->error);
+							}
+							
+							// Bind parameters dynamically
+							if (count($params) > 0) {
+								$stmt->bind_param($types, ...$params);
+							}
+							
 							$stmt->execute();
-							$result = $stmt->get_result();
+							$stmt->store_result(); // Store result set for num_rows
+							$num_rows = $stmt->num_rows;
+							
+							// Bind result variables
+							$stmt->bind_result($car_id, $make_val, $model_val, $year_val, $daily_rate, $branch_id);
+							
+							// Fetch all rows
+							while ($stmt->fetch()) {
+								$rows[] = [
+									'CarID' => $car_id,
+									'Make' => $make_val,
+									'Model' => $model_val,
+									'Year' => $year_val,
+									'DailyRate' => $daily_rate,
+									'BranchID' => $branch_id
+								];
+							}
+							$stmt->close();
 						} else {
 							$result = $conn->query($sql);
+							if ($result) {
+								$num_rows = $result->num_rows;
+								while ($row = $result->fetch_assoc()) {
+									$rows[] = $row;
+								}
+							} else {
+								echo '<div class="alert alert-danger">Error executing query: ' . $conn->error . '</div>';
+							}
 						}
 
-						if ($result && $result->num_rows > 0) {
+						if ($num_rows > 0) {
 							echo '<h3>' . (!empty($make) || !empty($model) || !empty($year) ? 'Search Results' : 'All Car Data') . '</h3>';
-							echo '<p>Found ' . $result->num_rows . ' car(s)</p>';
+							echo '<p>Found ' . $num_rows . ' car(s)</p>';
 
 							echo '<table class="data-table"><thead><tr>
 								<th>CarID</th><th>Make</th><th>Model</th>
 								<th>Year</th><th>Daily Rate</th><th>BranchID</th>
 							</tr></thead><tbody>';
 
-							while ($row = $result->fetch_assoc()) {
+							foreach ($rows as $row) {
 								echo "<tr>
 									<td>{$row['CarID']}</td>
 									<td>" . htmlspecialchars($row['Make']) . "</td>
